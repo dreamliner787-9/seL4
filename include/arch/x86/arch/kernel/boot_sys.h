@@ -8,6 +8,7 @@
 
 #include <arch/kernel/multiboot.h>
 #include <arch/kernel/multiboot2.h>
+#include <plat/machine/fbcon.h>
 
 /* type definitions (directly corresponding to abstract specification) */
 typedef struct boot_state {
@@ -30,6 +31,9 @@ typedef struct boot_state {
     seL4_X86_BootInfo_VBE vbe_info; /* Potential VBE information from multiboot */
     seL4_X86_BootInfo_mmap_t mb_mmap_info; /* memory map information from multiboot */
     seL4_X86_BootInfo_fb_t fb_info; /* framebuffer information as set by bootloader */
+#ifdef CONFIG_PC99_FRAMEBUFFER_CONSOLE
+    fbcon_info_t fbcon_info; /* framebuffer for the kernel console, from multiboot 1 or 2 */
+#endif
 } boot_state_t;
 
 extern boot_state_t boot_state;

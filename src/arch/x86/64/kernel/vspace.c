@@ -233,6 +233,13 @@ BOOT_CODE bool_t map_kernel_window(
                                                   );
 #endif
 
+    /* the framebuffer console has its own mapping in the device window */
+#ifdef CONFIG_HUGE_PAGE
+    fbcon_map_kernel_window(x64KSKernelPD);
+#else
+    fbcon_map_kernel_window(x64KSKernelPDs[BIT(PDPT_INDEX_BITS) - 1]);
+#endif
+
 #if CONFIG_MAX_NUM_TRACE_POINTS > 0
     /* use the last PD entry as the benchmark log storage.
      * the actual backing physical memory will be filled

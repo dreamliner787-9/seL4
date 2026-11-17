@@ -156,6 +156,9 @@ static BOOT_CODE bool_t try_boot_sys_node(cpu_id_t cpu_id)
      * be set *right now* instead of delayed */
     asm volatile("" ::: "memory");
 
+    /* a framebuffer outside the boot mappings is accessible from now on */
+    fbcon_kernel_window_ready();
+
 #ifdef CONFIG_KERNEL_SKIM_WINDOW
     if (!map_skim_window((vptr_t)ki_skim_start, (vptr_t)ki_skim_end)) {
         return false;
@@ -338,6 +341,7 @@ static BOOT_CODE bool_t try_boot_sys(void)
 {
     paddr_t mods_end_paddr = boot_state.mods_end_paddr;
     p_region_t ui_p_regs;
+    paddr_t load_base;
     paddr_t load_paddr;
 
     boot_state.ki_p_reg = get_p_reg_kernel_img();
@@ -515,6 +519,34 @@ static BOOT_CODE bool_t try_boot_sys_mbi1(
 
     cmdline_parse((const char *)(word_t)mbi->part1.cmdline, &cmdline_opt);
 
+#ifdef CONFIG_PC99_FRAMEBUFFER_CONSOLE
+    if (mbi->part1.flags & MULTIBOOT_INFO_FRAMEBUFFER_FLAG) {
+        printf("Got framebuffer info in multiboot. Physical address=%llx pitch=%u resolution=%ux%u@%u type=%u"
+               " rgb=%u:%u/%u:%u/%u:%u\n",
+               mbi->part3.fb_addr, mbi->part3.fb_pitch, mbi->part3.fb_width, mbi->part3.fb_height,
+               mbi->part3.fb_bpp, mbi->part3.fb_type,
+               mbi->part3.fb_red_field_position, mbi->part3.fb_red_mask_size,
+               mbi->part3.fb_green_field_position, mbi->part3.fb_green_mask_size,
+               mbi->part3.fb_blue_field_position, mbi->part3.fb_blue_mask_size);
+        boot_state.fbcon_info = (fbcon_info_t) {
+            .addr       = mbi->part3.fb_addr,
+            .pitch      = mbi->part3.fb_pitch,
+            .width      = mbi->part3.fb_width,
+            .height     = mbi->part3.fb_height,
+            .bpp        = mbi->part3.fb_bpp,
+            .type       = mbi->part3.fb_type,
+        };
+        if (mbi->part3.fb_type == FBCON_TYPE_RGB) {
+            boot_state.fbcon_info.red_pos    = mbi->part3.fb_red_field_position;
+            boot_state.fbcon_info.red_size   = mbi->part3.fb_red_mask_size;
+            boot_state.fbcon_info.green_pos  = mbi->part3.fb_green_field_position;
+            boot_state.fbcon_info.green_size = mbi->part3.fb_green_mask_size;
+            boot_state.fbcon_info.blue_pos   = mbi->part3.fb_blue_field_position;
+            boot_state.fbcon_info.blue_size  = mbi->part3.fb_blue_mask_size;
+        }
+    }
+#endif
+
     if ((mbi->part1.flags & MULTIBOOT_INFO_MEM_FLAG) == 0) {
         printf("Boot loader did not provide information about physical memory size\n");
         return false;
@@ -688,6 +720,25 @@ static BOOT_CODE bool_t try_boot_sys_mbi2(
             printf("Got framebuffer info in multiboot2. Current video mode is at physical address=%llx pitch=%u resolution=%ux%u@%u type=%u\n",
                    fb->addr, fb->pitch, fb->width, fb->height, fb->bpp, fb->type);
             boot_state.fb_info = *fb;
+#ifdef CONFIG_PC99_FRAMEBUFFER_CONSOLE
+            boot_state.fbcon_info = (fbcon_info_t) {
+                .addr   = fb->addr,
+                .pitch  = fb->pitch,
+                .width  = fb->width,
+                .height = fb->height,
+                .bpp    = fb->bpp,
+                .type   = fb->type,
+            };
+            if (fb->type == FBCON_TYPE_RGB && tag->size >= sizeof(*tag) + sizeof(multiboot2_fb_rgb_t)) {
+                multiboot2_fb_rgb_t const *rgb = (multiboot2_fb_rgb_t const *)behind_tag;
+                boot_state.fbcon_info.red_pos    = rgb->red_field_position;
+                boot_state.fbcon_info.red_size   = rgb->red_mask_size;
+                boot_state.fbcon_info.green_pos  = rgb->green_field_position;
+                boot_state.fbcon_info.green_size = rgb->green_mask_size;
+                boot_state.fbcon_info.blue_pos   = rgb->blue_field_position;
+                boot_state.fbcon_info.blue_size  = rgb->blue_mask_size;
+            }
+#endif
         }
 
         tag = (multiboot2_tag_t const *)((word_t)tag + ROUND_UP(tag->size, 3));
@@ -703,6 +754,38 @@ static BOOT_CODE bool_t try_boot_sys_mbi2(
     return true;
 }
 
+#ifdef CONFIG_PC99_FRAMEBUFFER_CONSOLE
+static BOOT_CODE void init_fb_console(void)
+{
+    fbcon_info_t const *fb = &boot_state.fbcon_info;
+    p_region_t fb_reg = {
+        .start = fb->addr,
+        .end = fb->addr + (paddr_t)fb->pitch * fb->height
+    };
+
+    if (!fb->addr) {
+        fbcon_disable();
+        return;
+    }
+    if (cmdline_opt.disable_fbcon) {
+        printf("Framebuffer console disabled on the command line\n");
+        fbcon_disable();
+        return;
+    }
+    /* Never draw into anything the kernel may later hand out as RAM */
+    for (word_t i = 0; i < boot_state.mem_p_regs.count; i++) {
+        p_region_t reg = boot_state.mem_p_regs.list[i];
+        if (fb_reg.start < reg.end && reg.start < fb_reg.end) {
+            printf("Framebuffer 0x%lx-0x%lx overlaps RAM, not using it as a console\n",
+                   fb_reg.start, fb_reg.end);
+            fbcon_disable();
+            return;
+        }
+    }
+    fbcon_init(fb);
+}
+#endif /* CONFIG_PC99_FRAMEBUFFER_CONSOLE */
+
 BOOT_CODE VISIBLE void boot_sys(
     unsigned long multiboot_magic,
     void *mbi)
@@ -716,6 +799,11 @@ BOOT_CODE VISIBLE void boot_sys(
     } else {
         printf("Boot loader is not multiboot 1 or 2 compliant %lx\n", multiboot_magic);
     }
+
+#ifdef CONFIG_PC99_FRAMEBUFFER_CONSOLE
+    /* Bring up the console even if parsing failed, so the error is visible. */
+    init_fb_console();
+#endif
 
     if (result) {
         result = try_boot_sys();

@@ -23,6 +23,9 @@ char cmdline_val[MAX_CMDLINE_VAL_LEN];
 const char cmdline_str_max_num_nodes[]  = {'m', 'a', 'x', '_', 'n', 'u', 'm', '_', 'n', 'o', 'd', 'e', 's', 0};
 const char cmdline_str_num_sh_frames[]  = {'n', 'u', 'm', '_', 's', 'h', '_', 'f', 'r', 'a', 'm', 'e', 's', 0};
 const char cmdline_str_disable_iommu[]  = {'d', 'i', 's', 'a', 'b', 'l', 'e', '_', 'i', 'o', 'm', 'm', 'u', 0};
+#ifdef CONFIG_PC99_FRAMEBUFFER_CONSOLE
+const char cmdline_str_disable_fbcon[]  = {'d', 'i', 's', 'a', 'b', 'l', 'e', '_', 'f', 'b', 'c', 'o', 'n', 0};
+#endif
 
 static int is_space(char c)
 {
@@ -163,4 +166,9 @@ void cmdline_parse(const char *cmdline, cmdline_opt_t *cmdline_opt)
 
     cmdline_opt->disable_iommu = parse_bool(cmdline, cmdline_str_disable_iommu);
     printf("Boot config: disable_iommu = %s\n", cmdline_opt->disable_iommu ? "true" : "false");
+
+#ifdef CONFIG_PC99_FRAMEBUFFER_CONSOLE
+    cmdline_opt->disable_fbcon = parse_bool(cmdline, cmdline_str_disable_fbcon);
+    printf("Boot config: disable_fbcon = %s\n", cmdline_opt->disable_fbcon ? "true" : "false");
+#endif
 }

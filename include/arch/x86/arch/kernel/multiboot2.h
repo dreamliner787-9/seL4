@@ -42,6 +42,20 @@ typedef struct multiboot2_fb {
     uint8_t  type;
 } PACKED multiboot2_fb_t;
 
+/* The framebuffer tag continues with type specific colour information. This
+ * is the layout used by GRUB (and Limine) for direct RGB colour. It is kept
+ * separate from multiboot2_fb_t, which is also part of the bootinfo ABI. */
+typedef struct multiboot2_fb_rgb {
+    multiboot2_fb_t fb;
+    uint16_t reserved;
+    uint8_t  red_field_position;
+    uint8_t  red_mask_size;
+    uint8_t  green_field_position;
+    uint8_t  green_mask_size;
+    uint8_t  blue_field_position;
+    uint8_t  blue_mask_size;
+} PACKED multiboot2_fb_rgb_t;
+
 enum multiboot2_tags {
     MULTIBOOT2_TAG_END     = 0,
     MULTIBOOT2_TAG_CMDLINE = 1,

@@ -21,6 +21,7 @@ add_sources(
         pit.c
         io.c
         intel-vtd.c
+        fbcon.c
 )
 
 add_bf_source_old(

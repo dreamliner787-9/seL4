@@ -9,11 +9,13 @@
 #include <arch/model/statedata.h>
 #include <machine/io.h>
 #include <plat/machine/io.h>
+#include <plat/machine/fbcon.h>
 #include <drivers/uart.h>
 
 #if defined(CONFIG_DEBUG_BUILD) || defined(CONFIG_PRINTING)
 void serial_init(uint16_t port)
 {
+    return;
     while (!(in8(port + 5) & 0x60)); /* wait until not busy */
 
     out8(port + 1, 0x00); /* disable generating interrupts */
@@ -37,6 +39,7 @@ void serial_init(uint16_t port)
 void uart_drv_putchar(
     unsigned char c)
 {
+    return;
     while (x86KSdebugPort && (in8(x86KSdebugPort + 5) & 0x20) == 0);
     out8(x86KSdebugPort, c);
 }
@@ -45,6 +48,8 @@ void kernel_putDebugChar(unsigned char c)
 {
     /* this will take care of CR/LF handling and call uart_drv_putchar() */
     uart_console_putchar(c);
+    /* mirror onto the boot loader's framebuffer, if there is one */
+    fbcon_putchar(c);
 }
 
 #endif /* CONFIG_PRINTING */

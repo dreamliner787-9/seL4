@@ -271,6 +271,18 @@ config_option(
   DEFAULT ON
   DEPENDS "KernelPrinting"
   DEFAULT_DISABLED OFF)
+# Declared here rather than in src/plat/pc99/config.cmake, as it depends on
+# KernelPrinting, which is only declared after the platform configuration.
+config_option(
+  KernelPC99FramebufferConsole PC99_FRAMEBUFFER_CONSOLE
+  "Mirror all kernel output (boot log, printf, seL4_DebugPutChar) onto the \
+    framebuffer handed over by a multiboot 1 or 2 boot loader, if there is one. \
+    Linear RGB framebuffers and EGA text mode are supported. Output printed before \
+    the framebuffer is known is buffered and replayed. Can be switched off at boot \
+    time with the 'disable_fbcon' kernel command line option."
+  DEFAULT ON
+  DEPENDS "KernelPrinting;KernelPlatPC99;KernelSel4ArchX86_64"
+  DEFAULT_DISABLED OFF)
 config_string(
   KernelUserStackTraceLength USER_STACK_TRACE_LENGTH
   "On a double fault the kernel can try and print out the users stack to aid \

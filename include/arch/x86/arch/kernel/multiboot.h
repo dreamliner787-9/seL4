@@ -57,6 +57,27 @@ typedef struct multiboot_info {
         uint16_t vbe_interface_off;
         uint16_t vbe_interface_len;
     } part2;
+    /* only valid if MULTIBOOT_INFO_FRAMEBUFFER_FLAG is set */
+    struct multiboot_part3 {
+        uint64_t fb_addr;
+        uint32_t fb_pitch;
+        uint32_t fb_width;
+        uint32_t fb_height;
+        uint8_t  fb_bpp;
+        uint8_t  fb_type;
+        /* The spec puts the colour info right here (offset 110), but GRUB's
+         * reference struct is not packed and the colour info is a union
+         * that contains a uint32_t, so it really is at offset 112. Boot loaders
+         * (GRUB, Limine) follow that layout. */
+        uint16_t fb_reserved;
+        /* colour info, the layout below is the one for direct RGB colour */
+        uint8_t  fb_red_field_position;
+        uint8_t  fb_red_mask_size;
+        uint8_t  fb_green_field_position;
+        uint8_t  fb_green_mask_size;
+        uint8_t  fb_blue_field_position;
+        uint8_t  fb_blue_mask_size;
+    } part3;
 } PACKED multiboot_info_t;
 
 #define MULTIBOOT_INFO_MEM_FLAG     BIT(0)
@@ -64,6 +85,7 @@ typedef struct multiboot_info {
 #define MULTIBOOT_INFO_MODS_FLAG    BIT(3)
 #define MULTIBOOT_INFO_MMAP_FLAG    BIT(6)
 #define MULTIBOOT_INFO_GRAPHICS_FLAG BIT(11)
+#define MULTIBOOT_INFO_FRAMEBUFFER_FLAG BIT(12)
 #define MULTIBOOT_MMAP_USEABLE_TYPE     1
 #define MULTIBOOT_MMAP_RESERVED_TYPE    2
 #define MULTIBOOT_MMAP_ACPI_TYPE        3
