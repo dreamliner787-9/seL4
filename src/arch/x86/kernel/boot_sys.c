@@ -453,32 +453,37 @@ static BOOT_CODE bool_t try_boot_sys(void)
     }
 
     mods_end_paddr = ROUND_UP(mods_end_paddr, PAGE_BITS);
-    assert(mods_end_paddr > boot_state.ki_p_reg.end);
+
+    /* The userland image is ELF-loaded behind the boot modules and then moved
+     * right behind the kernel image, over the modules. Boot loaders may also
+     * place the modules below the kernel image (GRUB on UEFI does), then it is
+     * loaded right behind the kernel image straight away. */
+    load_base = MAX(mods_end_paddr, ROUND_UP(boot_state.ki_p_reg.end, PAGE_BITS));
 
     printf("ELF-loading userland images from boot modules:\n");
-    load_paddr = mods_end_paddr;
-
-    load_paddr = load_boot_module(boot_state.boot_module_start, boot_state.boot_module_end, load_paddr);
+    load_paddr = load_boot_module(boot_state.boot_module_start, boot_state.boot_module_end, load_base);
     if (!load_paddr) {
         return false;
     }
 
     /* calculate final location of userland images */
     ui_p_regs.start = boot_state.ki_p_reg.end;
-    ui_p_regs.end = ui_p_regs.start + load_paddr - mods_end_paddr;
+    ui_p_regs.end = ui_p_regs.start + load_paddr - load_base;
 
     printf(
         "Moving loaded userland images to final location: from=0x%lx to=0x%lx size=0x%lx\n",
-        mods_end_paddr,
+        load_base,
         ui_p_regs.start,
         ui_p_regs.end - ui_p_regs.start
     );
-    memcpy((void *)ui_p_regs.start, (void *)mods_end_paddr, ui_p_regs.end - ui_p_regs.start);
+    if (load_base != ui_p_regs.start) {
+        memcpy((void *)ui_p_regs.start, (void *)load_base, ui_p_regs.end - ui_p_regs.start);
+    }
 
     /* adjust p_reg and pv_offset to final load address */
-    boot_state.ui_info.p_reg.start -= mods_end_paddr - ui_p_regs.start;
-    boot_state.ui_info.p_reg.end   -= mods_end_paddr - ui_p_regs.start;
-    boot_state.ui_info.pv_offset   -= mods_end_paddr - ui_p_regs.start;
+    boot_state.ui_info.p_reg.start -= load_base - ui_p_regs.start;
+    boot_state.ui_info.p_reg.end   -= load_base - ui_p_regs.start;
+    boot_state.ui_info.pv_offset   -= load_base - ui_p_regs.start;
 
     /* ==== following code corresponds to abstract specification after "select" ==== */
 
